@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+.env.local
+*.local
+.DS_Store
+
+# Documentación interna del agente: se queda en local, no se publica
+AGENTS.md
+contexto.md
+memoria.md
+.opencode/
