@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { requestTranslation } from './api'
 import type { Direction, Mode, TranslationResult } from './types'
 
 // Las tres pestañas. `hint` es la frase que explica qué hace cada modo,
@@ -28,20 +29,31 @@ export default function App() {
   const [direction, setDirection] = useState<Direction>('ja-to-es')
   const [text, setText] = useState('')
   const [result, setResult] = useState<TranslationResult | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const activeMode = MODES.find((m) => m.id === mode)!
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!text.trim()) return
+    const phrase = text.trim()
+    if (!phrase || isLoading) return
 
-    // Etapa 2: aquí irá fetch('/api/translate', { method: 'POST', ... })
-    // Por ahora fingimos la respuesta para poder construir la interfaz sin gastar cuota.
-    setResult({
-      mode,
-      translation: 'Todavía no hay IA conectada. Esto es un marcador de posición de la Etapa 1.',
-      segments: [],
-    })
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      // El modo y la dirección se capturan aquí: la respuesta pertenece a esta petición,
+      // aunque el usuario cambie de pestaña mientras espera.
+      const data = await requestTranslation({ text: phrase, mode, direction })
+      setResult(data)
+    } catch (problem) {
+      // La tarjeta anterior era de otra frase: dejarla visible junto al error confunde.
+      setResult(null)
+      setError(problem instanceof Error ? problem.message : 'Algo salió mal.')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -107,23 +119,29 @@ export default function App() {
             <span className="text-xs text-stone-400">{text.length} caracteres</span>
             <button
               type="submit"
-              disabled={!text.trim()}
+              disabled={!text.trim() || isLoading}
               className="rounded-xl bg-red-600 px-5 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-stone-300"
             >
-              Traducir
+              {isLoading ? 'Traduciendo…' : 'Traducir'}
             </button>
           </div>
         </form>
 
         {/* Una sola salida: la del modo que se envió. Sin pestañas aquí. */}
         <section className="mt-6">
+          {error && (
+            <p role="alert" className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+              {error}
+            </p>
+          )}
+
           {result ? (
             <article className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
               <div className="mb-3 flex flex-wrap items-center gap-2">
                 <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ${BADGE[result.mode]}`}>
                   Resultado de: {labelOf(result.mode)}
                 </span>
-                <span className="text-xs text-stone-400">Etapa 1 · sin IA todavía</span>
+                <span className="text-xs text-stone-400">Datos de prueba · sin IA todavía</span>
               </div>
               <p className="whitespace-pre-wrap text-stone-800">{result.translation}</p>
             </article>
