@@ -1,38 +1,29 @@
 import { useState, type FormEvent } from 'react'
 import { requestTranslation } from './api'
-import type { Direction, Mode, TranslationResult } from './types'
+import { ResultCard } from './components/ResultCard'
+import { MODES, modeInfo } from './modes'
+import type { Direction, Mode, TranslationRequest, TranslationResult } from './types'
 
-// Las tres pestañas. `hint` es la frase que explica qué hace cada modo,
-// para que el usuario no tenga que adivinar qué cambia al cambiar de pestaña.
-const MODES: Array<{ id: Mode; label: string; hint: string }> = [
-  { id: 'translate', label: 'Traductor', hint: 'Traduce la frase, sin más.' },
-  { id: 'breakdown', label: 'Desglose', hint: 'Traduce y explica la frase parte a parte.' },
-  { id: 'grammar', label: 'Gramática', hint: 'Traduce, desglosa y explica la gramática. El modo más completo.' },
-]
+/** Petición + respuesta, para que la tarjeta sepa de qué frase habla. */
+type Answer = {
+  request: TranslationRequest
+  result: TranslationResult
+}
 
 const DIRECTIONS: Array<{ id: Direction; label: string }> = [
   { id: 'ja-to-es', label: '日本語 → Español' },
   { id: 'es-to-ja', label: 'Español → 日本語' },
 ]
 
-// Color de la etiqueta de la tarjeta de resultado, según el modo que la generó.
-const BADGE: Record<Mode, string> = {
-  translate: 'bg-sky-50 text-sky-800 ring-sky-200',
-  breakdown: 'bg-amber-50 text-amber-900 ring-amber-200',
-  grammar: 'bg-violet-50 text-violet-900 ring-violet-200',
-}
-
-const labelOf = (mode: Mode) => MODES.find((m) => m.id === mode)!.label
-
 export default function App() {
   const [mode, setMode] = useState<Mode>('translate')
   const [direction, setDirection] = useState<Direction>('ja-to-es')
   const [text, setText] = useState('')
-  const [result, setResult] = useState<TranslationResult | null>(null)
+  const [answer, setAnswer] = useState<Answer | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const activeMode = MODES.find((m) => m.id === mode)!
+  const activeMode = modeInfo(mode)
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -45,11 +36,12 @@ export default function App() {
     try {
       // El modo y la dirección se capturan aquí: la respuesta pertenece a esta petición,
       // aunque el usuario cambie de pestaña mientras espera.
-      const data = await requestTranslation({ text: phrase, mode, direction })
-      setResult(data)
+      const request: TranslationRequest = { text: phrase, mode, direction }
+      const result = await requestTranslation(request)
+      setAnswer({ request, result })
     } catch (problem) {
       // La tarjeta anterior era de otra frase: dejarla visible junto al error confunde.
-      setResult(null)
+      setAnswer(null)
       setError(problem instanceof Error ? problem.message : 'Algo salió mal.')
     } finally {
       setIsLoading(false)
@@ -135,16 +127,8 @@ export default function App() {
             </p>
           )}
 
-          {result ? (
-            <article className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
-              <div className="mb-3 flex flex-wrap items-center gap-2">
-                <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ${BADGE[result.mode]}`}>
-                  Resultado de: {labelOf(result.mode)}
-                </span>
-                <span className="text-xs text-stone-400">Datos de prueba · sin IA todavía</span>
-              </div>
-              <p className="whitespace-pre-wrap text-stone-800">{result.translation}</p>
-            </article>
+          {answer ? (
+            <ResultCard request={answer.request} result={answer.result} />
           ) : (
             <p className="rounded-2xl border border-dashed border-stone-300 p-6 text-center text-sm text-stone-400">
               La respuesta aparecerá aquí. Elige un modo, escribe una frase y pulsa Traducir.
