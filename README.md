@@ -56,15 +56,37 @@ nihon-translator/
 ├── contexto.md          estado, arranque y siguiente paso
 ├── memoria.md           decisiones y su porqué
 ├── index.html           la única página; contiene <div id="root">
-├── vite.config.ts       servidor de desarrollo (aquí se montará /api/translate)
-├── tsconfig.json        TypeScript en modo estricto
+├── vite.config.ts       plugins de Vite + middleware POST /api/translate (dev y preview)
+├── tsconfig.json        TypeScript en modo estricto (incluye src/ y server/)
 ├── .env.example         variables previstas (sin valores reales)
+├── server/
+│   ├── fixtures.ts      respuestas falsas por dirección (temporal, Etapa 2)
+│   └── translate.ts     validación + translate(): lógica pura del endpoint
 └── src/
     ├── main.tsx         arranque de React
     ├── index.css        Tailwind v4 + tokens propios
     ├── types.ts         contrato: Mode, Direction, Segment, TranslationResult
-    └── App.tsx          pestañas, dirección, textarea, botón y tarjeta de salida
+    ├── modes.ts         etiqueta, hint y color de cada modo
+    ├── api.ts           requestTranslation(): fetch + errores + validación
+    ├── App.tsx          pestañas, dirección, textarea, botón y estados
+    └── components/
+        └── ResultCard.tsx   la única tarjeta de salida
 ```
+
+## API local
+
+`POST /api/translate` responde con datos **falsos pero con la forma definitiva** de
+`TranslationResult`. Lo monta un plugin de `vite.config.ts`, así que funciona con
+`npm run dev` y con `npm run preview`.
+
+```bash
+curl -X POST http://localhost:5173/api/translate \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"学校に行きます。","mode":"grammar","direction":"ja-to-es"}'
+```
+
+Modos: `translate`, `breakdown`, `grammar` (acumulativos). Direcciones: `ja-to-es`, `es-to-ja`.
+Errores: `400` (petición inválida), `405` (método no permitido), `500` (fallo interno).
 
 ## IA
 
@@ -75,12 +97,13 @@ Se usa la **capa gratuita de la API de Gemini** (modelo de trabajo: `gemini-3.8-
 - Límites reales: <https://aistudio.google.com/rate-limit> (por proyecto, no por clave).
 - En free tier los prompts se usan para mejorar los productos de Google: no meter datos sensibles.
 
-Todavía **no hay llamada real**: el botón devuelve un texto de relleno.
+Todavía **no hay llamada real**: `/api/translate` devuelve datos falsos con la forma definitiva.
 
 ## Estado
 
 - ✅ **Etapa 1**: esqueleto que arranca (pestañas, dirección, botón, tarjeta de salida).
-- ⬜ **Etapa 2**: contrato de datos definitivo + `/api/translate` devolviendo datos falsos.
+- ✅ **Etapa 2**: contrato definitivo + `/api/translate` con datos falsos, interfaz conectada y
+  segmentos en pantalla (original · traducción · palabra por palabra · gramática).
 - ⬜ **Etapa 3**: IA real (proveedor Gemini tras `/api/translate`).
 - ⬜ **Etapa 4**: las cinco funcionalidades en pantalla, una a una (incluye furigana y diccionario).
 - ⬜ **Etapa 5**: despliegue en Netlify (`netlify.toml`) y documentación final.
