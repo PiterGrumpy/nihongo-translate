@@ -94,13 +94,14 @@ Reglas ya decididas:
 
 ```
 nihon-translator/
-├── AGENTS.md            reglas del proyecto (solo local, no se publica)
-├── contexto.md          estado y siguiente paso (solo local)
-├── memoria.md           decisiones y su porqué (solo local)
-├── index.html           la única página; contiene <div id="root">
-├── vite.config.ts       plugins de Vite + middleware POST /api/translate (dev y preview)
+├── README.md
+├── package.json         scripts: dev / build / preview
+├── package-lock.json    versiones exactas de las dependencias
 ├── tsconfig.json        TypeScript en modo estricto (incluye src/ y server/)
+├── vite.config.ts       plugins de Vite + middleware POST /api/translate (dev y preview)
+├── index.html           la única página; contiene <div id="root">
 ├── .env.example         plantilla de variables (sin valores reales)
+├── .gitignore
 ├── server/
 │   ├── translate.ts     validación de la petición + translate(): la puerta del endpoint
 │   ├── prompts.ts       un prompt y un esquema JSON por modo (acumulativos)
@@ -109,7 +110,7 @@ nihon-translator/
 │       ├── index.ts     askProvider(): elige proveedor según AI_PROVIDER
 │       └── gemini.ts    llamada a Gemini, carrera de modelos, timeouts y errores
 └── src/
-    ├── main.tsx         arranque de React
+    ├── main.tsx         arranque de React + SettingsProvider
     ├── index.css        Tailwind v4 + tokens propios
     ├── types.ts         contrato: Mode, Direction, Segment, TranslationResult
     ├── modes.ts         etiqueta, hint y color de cada modo
@@ -121,9 +122,6 @@ nihon-translator/
         ├── ResultCard.tsx   la única tarjeta de salida
         └── Furigana.tsx     japonés con <ruby> (o texto plano si no cuadra)
 ```
-
-`AGENTS.md`, `contexto.md`, `memoria.md` y `.opencode/` están en `.gitignore`: son
-documentación interna del agente y viven solo en local. El repo público lleva solo código.
 
 ## API local
 
