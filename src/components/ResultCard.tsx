@@ -1,5 +1,6 @@
+import { useDictionary } from '../DictionaryContext'
 import { modeInfo } from '../modes'
-import type { TranslationRequest, TranslationResult } from '../types'
+import type { Segment, TranslationRequest, TranslationResult } from '../types'
 import { Furigana } from './Furigana'
 
 type Props = {
@@ -18,6 +19,9 @@ type Props = {
  *
  * El japonés se pinta con `<ruby>` cuando el interruptor global de furigana está activo:
  * el original en `ja-to-es` y la traducción en `es-to-ja` (son los trozos que devuelve la IA).
+ *
+ * En Desglose y Gramática cada palabra con significado lleva un botón **Guardar** que la
+ * añade al diccionario de sesión. Traductor no lo lleva: allí la IA no devuelve significado.
  */
 export function ResultCard({ request, result }: Props) {
   const mode = modeInfo(result.mode)
@@ -70,6 +74,7 @@ export function ResultCard({ request, result }: Props) {
                 <span className="text-lg leading-snug">{segment.text}</span>
                 {segment.reading && <span className="text-xs text-sky-700">{segment.reading}</span>}
                 {segment.meaning && <span className="text-sm text-stone-600">{segment.meaning}</span>}
+                <SaveButton segment={segment} />
               </li>
             ))}
           </ul>
@@ -83,5 +88,36 @@ export function ResultCard({ request, result }: Props) {
         </div>
       )}
     </article>
+  )
+}
+
+/**
+ * Botón de una palabra del desglose.
+ *
+ * Solo se pinta si la IA devolvió significado (por eso Traductor no lo tiene). Si la
+ * palabra ya está en el diccionario, se muestra **Guardado** y no se puede repetir.
+ */
+function SaveButton({ segment }: { segment: Segment }) {
+  const { saveWord, hasWord } = useDictionary()
+
+  if (!segment.meaning) return null
+
+  const meaning = segment.meaning
+  const saved = hasWord(segment)
+
+  return (
+    <button
+      type="button"
+      disabled={saved}
+      aria-label={saved ? `${segment.text} ya está en el diccionario` : `Guardar ${segment.text} en el diccionario`}
+      onClick={() => saveWord({ text: segment.text, reading: segment.reading, meaning })}
+      className={`ml-auto shrink-0 rounded-full border px-2.5 py-0.5 text-xs transition ${
+        saved
+          ? 'cursor-default border-stone-200 bg-stone-50 text-stone-400'
+          : 'border-amber-300 text-amber-900 hover:bg-amber-50'
+      }`}
+    >
+      {saved ? 'Guardado' : 'Guardar'}
+    </button>
   )
 }

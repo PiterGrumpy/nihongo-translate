@@ -1,7 +1,8 @@
 # Nihon Translator
 
 App web para traducir **japonés ↔ español** pensada para estudiar: no solo traduce, también
-explica la frase parte a parte y su gramática, con furigana opcional.
+explica la frase parte a parte y su gramática, con furigana opcional y un diccionario de sesión
+para guardar las palabras que quieres repasar.
 
 Proyecto de aprendizaje: cada etapa se puede arrancar y probar antes de pasar a la siguiente.
 
@@ -70,6 +71,11 @@ Reglas ya decididas:
   en los segmentos de los tres modos. No se persiste: al recargar vuelve a encendido.
 - **Caché** en memoria por (dirección, frase, modo): repetir una consulta es instantáneo y no
   gasta cupo. Se vacía al recargar la página.
+- **Diccionario de sesión**: en **Desglose** y **Gramática**, cada palabra con significado lleva
+  un botón **Guardar**. Al guardar aparece debajo de la tarjeta la sección plegable
+  **Diccionario de sesión (N)**, con la palabra (con furigana), su lectura, su significado y
+  **Quitar**. No duplica (`texto|lectura`), no llama a la IA y se vacía al recargar. En
+  **Traductor** no hay botón porque la IA no devuelve significado en ese modo.
 
 ## Prueba rápida
 
@@ -80,13 +86,16 @@ Reglas ya decididas:
 4. Cambia a **Español → 日本語**, prueba `Ayer llovió, pero hoy hace sol.` y comprueba que el
    furigana sale ahora en la traducción japonesa.
 5. Repite la misma frase en el mismo modo y dirección: la respuesta es instantánea (caché).
+6. Cambia a **Desglose**, traduce `学校に行きます。` y pulsa **Guardar** en dos palabras:
+   aparece abajo **Diccionario de sesión (2)**. Prueba **Ocultar/Mostrar** y **Quitar**.
+7. Recarga la página: el diccionario vuelve a estar vacío (es de sesión, sin persistencia).
 
 ## Limitaciones conocidas
 
 - La latencia del **free tier** de Gemini varía por momentos: la misma frase puede tardar 1 s o
   20 s. La app lo mitiga con carrera de modelos, timeout y contador de espera, pero no lo elimina.
-- **Sin persistencia** en la V1: la caché, el diccionario (cuando exista) y el estado del
-  interruptor de furigana se pierden al recargar.
+- **Sin persistencia** en la V1: la caché, el diccionario de sesión y el estado del interruptor
+  de furigana se pierden al recargar.
 - Si la IA trocea la frase de forma que los segmentos no reconstruyen el texto, el furigana cae
   a texto plano a propósito: mejor sin lectura que con una frase rota.
 
@@ -110,17 +119,20 @@ nihon-translator/
 │       ├── index.ts     askProvider(): elige proveedor según AI_PROVIDER
 │       └── gemini.ts    llamada a Gemini, carrera de modelos, timeouts y errores
 └── src/
-    ├── main.tsx         arranque de React + SettingsProvider
+    ├── main.tsx         arranque de React + providers (ajustes y diccionario)
     ├── index.css        Tailwind v4 + tokens propios
     ├── types.ts         contrato: Mode, Direction, Segment, TranslationResult
     ├── modes.ts         etiqueta, hint y color de cada modo
     ├── api.ts           requestTranslation(): fetch + errores + validación
     ├── cache.ts         caché en memoria por (dirección, modo, frase)
-    ├── SettingsContext.tsx  ajuste global: mostrar/ocultar furigana
+    ├── dictionary.ts    lógica pura del diccionario: añadir, deduplicar, quitar
+    ├── SettingsContext.tsx   ajuste global: mostrar/ocultar furigana
+    ├── DictionaryContext.tsx estado global del diccionario de sesión
     ├── App.tsx          pestañas, dirección, textarea, botón y estados
     └── components/
-        ├── ResultCard.tsx   la única tarjeta de salida
-        └── Furigana.tsx     japonés con <ruby> (o texto plano si no cuadra)
+        ├── ResultCard.tsx   la única tarjeta de salida (+ botón Guardar)
+        ├── Furigana.tsx     japonés con <ruby> (o texto plano si no cuadra)
+        └── Dictionary.tsx   lista plegable de palabras guardadas
 ```
 
 ## API local
@@ -176,9 +188,9 @@ Se usa la **capa gratuita de la API de Gemini**. Modelo de trabajo: `gemini-3.5-
   segmentos en pantalla (original · traducción · palabra por palabra · gramática).
 - ✅ **Etapa 3**: IA real (Gemini detrás de `/api/translate`), con carrera de modelos, saneado
   de respuestas, caché en memoria y contador de espera.
-- 🟡 **Etapa 4**: las cinco funcionalidades en pantalla, una a una.
+- ✅ **Etapa 4**: las cinco funcionalidades en pantalla.
   - ✅ Furigana global con `<ruby>` e interruptor (original en `ja-to-es`, traducción en `es-to-ja`).
-  - ⬜ Diccionario de sesión.
+  - ✅ Diccionario de sesión: guardar, listar y quitar palabras desde Desglose y Gramática.
 - ⬜ **Etapa 5**: despliegue en Netlify (`netlify.toml`) y documentación final.
 
 ## Versiones

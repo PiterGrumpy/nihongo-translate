@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { requestTranslation } from './api'
 import { cachedResult, rememberResult } from './cache'
+import { Dictionary } from './components/Dictionary'
 import { ResultCard } from './components/ResultCard'
 import { MODES, modeInfo } from './modes'
 import { useSettings } from './SettingsContext'
@@ -196,6 +197,9 @@ export default function App() {
             </p>
           )}
         </section>
+
+        {/* Diccionario de sesión: no es una pestaña ni un modo, vive debajo de la salida. */}
+        <Dictionary />
       </div>
     </div>
   )
