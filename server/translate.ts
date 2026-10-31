@@ -1,5 +1,7 @@
-import type { Direction, Mode, Segment, TranslationRequest, TranslationResult } from '../src/types.ts'
-import { FIXTURES } from './fixtures.ts'
+import type { Direction, Mode, TranslationRequest, TranslationResult } from '../src/types.ts'
+import { buildPrompt } from './prompts.ts'
+import { askProvider, type ProviderEnv } from './providers/index.ts'
+import { sanitizeAnswer } from './sanitize.ts'
 
 /** Límite defensivo: suficiente para una frase de estudio y barato de validar. */
 export const MAX_TEXT_LENGTH = 500
@@ -9,13 +11,13 @@ const DIRECTIONS: readonly Direction[] = ['ja-to-es', 'es-to-ja']
 
 /**
  * Error de petición mal formada. La capa HTTP lo traduce a un 400; el resto de errores
- * son fallos nuestros (500).
+ * son fallos nuestros (500) o de la IA (`ProviderError`).
  */
 export class InvalidRequestError extends Error {}
 
 /**
  * Comprueba el cuerpo de la petición y devuelve una petición limpia.
- * No fiarse del cliente: el `mode` decide qué prompt se usa en la Etapa 3.
+ * No fiarse del cliente: el `mode` decide qué prompt se usa.
  */
 export function parseTranslationRequest(body: unknown): TranslationRequest {
   if (typeof body !== 'object' || body === null) {
@@ -41,40 +43,15 @@ export function parseTranslationRequest(body: unknown): TranslationRequest {
 }
 
 /**
- * Devuelve una respuesta falsa con la forma exacta de `TranslationResult`.
+ * Traduce de verdad: elige el prompt del modo, llama al proveedor y sanea la respuesta.
  *
- * Es acumulativo, igual que el diseño:
- * - `translate`  → traducción + segmentos con lectura
- * - `breakdown`  → lo anterior + significado de cada palabra
- * - `grammar`    → lo anterior + explicación gramatical
+ * Sigue siendo la única puerta del resto del servidor: la capa HTTP y (en la Etapa 5)
+ * la Netlify Function solo conocen esta función. Cambia por dentro, no por fuera.
  */
-export function translate(request: TranslationRequest): TranslationResult {
-  const fixture = FIXTURES[request.direction]
-
-  const result: TranslationResult = {
-    mode: request.mode,
-    translation: fixture.translation,
-    segments: segmentsForMode(fixture.segments, request.mode),
-  }
-
-  if (request.mode === 'grammar') {
-    result.grammar = fixture.grammar
-  }
-
-  return result
-}
-
-/** Copia los segmentos quedándose solo con los campos que corresponden al modo. */
-function segmentsForMode(segments: Segment[], mode: Mode): Segment[] {
-  return segments.map((segment) => {
-    const copy: Segment = { text: segment.text }
-
-    // La lectura viaja siempre: el furigana puede activarse en cualquier modo.
-    if (segment.reading) copy.reading = segment.reading
-
-    // El significado solo tiene sentido a partir del desglose.
-    if (mode !== 'translate' && segment.meaning) copy.meaning = segment.meaning
-
-    return copy
-  })
+export async function translate(
+  request: TranslationRequest,
+  env: ProviderEnv,
+): Promise<TranslationResult> {
+  const answer = await askProvider(buildPrompt(request), env)
+  return sanitizeAnswer(answer, request.mode)
 }

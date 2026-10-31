@@ -14,6 +14,7 @@ Proyecto de aprendizaje: cada etapa se puede arrancar y probar antes de pasar a 
 ```bash
 cd proyectos/nihon-translator
 npm install        # solo la primera vez
+cp .env.example .env   # y pega tu GEMINI_API_KEY dentro (nunca se sube al repo)
 npm run dev        # http://localhost:5173
 ```
 
@@ -46,7 +47,7 @@ Reglas ya decididas:
 - **Furigana**: un interruptor global. Si está activo, todo kanji lleva su lectura kana en
   cualquier modo. La lectura la devuelve la IA en los segmentos, así que los tres prompts
   la piden aunque el modo no la pinte.
-- Caché en memoria por par (frase, modo) para no repetir llamadas.
+- Caché en memoria por (dirección, frase, modo) para no repetir llamadas ni gastar cupo.
 
 ## Estructura
 
@@ -60,14 +61,19 @@ nihon-translator/
 ├── tsconfig.json        TypeScript en modo estricto (incluye src/ y server/)
 ├── .env.example         variables previstas (sin valores reales)
 ├── server/
-│   ├── fixtures.ts      respuestas falsas por dirección (temporal, Etapa 2)
-│   └── translate.ts     validación + translate(): lógica pura del endpoint
+│   ├── translate.ts     validación de la petición + translate(): la puerta del endpoint
+│   ├── prompts.ts       un prompt y un esquema JSON por modo (acumulativos)
+│   ├── sanitize.ts      frontera de seguridad: valida la respuesta de la IA
+│   └── providers/
+│       ├── index.ts     askProvider(): elige proveedor según AI_PROVIDER
+│       └── gemini.ts    llamada a Gemini, carrera de modelos, timeouts y errores
 └── src/
     ├── main.tsx         arranque de React
     ├── index.css        Tailwind v4 + tokens propios
     ├── types.ts         contrato: Mode, Direction, Segment, TranslationResult
     ├── modes.ts         etiqueta, hint y color de cada modo
     ├── api.ts           requestTranslation(): fetch + errores + validación
+    ├── cache.ts         caché en memoria por (dirección, modo, frase)
     ├── App.tsx          pestañas, dirección, textarea, botón y estados
     └── components/
         └── ResultCard.tsx   la única tarjeta de salida
@@ -75,9 +81,9 @@ nihon-translator/
 
 ## API local
 
-`POST /api/translate` responde con datos **falsos pero con la forma definitiva** de
-`TranslationResult`. Lo monta un plugin de `vite.config.ts`, así que funciona con
-`npm run dev` y con `npm run preview`.
+`POST /api/translate` llama de verdad a Gemini y devuelve un `TranslationResult`.
+Lo monta un plugin de `vite.config.ts` (con el `.env` cargado), así que funciona con
+`npm run dev` y con `npm run preview`. La clave **nunca** viaja al navegador.
 
 ```bash
 curl -X POST http://localhost:5173/api/translate \
@@ -86,25 +92,46 @@ curl -X POST http://localhost:5173/api/translate \
 ```
 
 Modos: `translate`, `breakdown`, `grammar` (acumulativos). Direcciones: `ja-to-es`, `es-to-ja`.
-Errores: `400` (petición inválida), `405` (método no permitido), `500` (fallo interno).
+
+| Caso | Respuesta |
+|---|---|
+| POST válido | `200` con `TranslationResult` |
+| Texto vacío / > 500 caracteres / modo o dirección desconocidos / JSON inválido / cuerpo > 10 KB | `400` |
+| Método distinto de POST | `405` |
+| Falta `GEMINI_API_KEY` o proveedor desconocido | `500` |
+| La IA rechaza la petición (modelo inexistente, respuesta incompleta) | `502` |
+| Modelo saturado o cupo agotado (429/503) | `503` |
+| Ningún modelo contesta a tiempo | `504` |
+
+Todos los errores son `{ error: string }` con un mensaje en español; el detalle técnico de
+Google se queda en el log del servidor.
 
 ## IA
 
-Se usa la **capa gratuita de la API de Gemini** (modelo de trabajo: `gemini-3.8-flash`).
+Se usa la **capa gratuita de la API de Gemini**. Modelo de trabajo: `gemini-3.5-flash-lite`
+(medido en 4–6 s incluso con el prompt de gramática y frases largas). Modelo de reserva:
+`gemini-3.5-flash`.
 
+- **Carrera de modelos**: si el principal no contesta en `GEMINI_HEDGE_DELAY_MS` (1,5 s), el de
+  reserva sale en paralelo y gana el primero que termine; el otro se cancela. Si el principal
+  falla de inmediato (503), la reserva sale sin esperar.
+- **Timeout por intento**: `GEMINI_TIMEOUT_MS` (15 s). La app nunca se queda colgada.
+- **Respuestas saneadas** en `server/sanitize.ts`: si la IA devuelve menos campos de los que
+  pide el modo, es un error claro, no un `undefined` en pantalla.
 - La clave vivirá **solo** en el servidor (Netlify Functions). Nunca en el navegador.
 - No usar Gemma (solo free tier, 16k tokens/minuto) ni `gemini-4-argon` / Pro (no existen en free tier).
 - Límites reales: <https://aistudio.google.com/rate-limit> (por proyecto, no por clave).
 - En free tier los prompts se usan para mejorar los productos de Google: no meter datos sensibles.
-
-Todavía **no hay llamada real**: `/api/translate` devuelve datos falsos con la forma definitiva.
+- La latencia del free tier **varía por momentos** (el mismo modelo y frase pueden tardar 1 s o
+  20 s por la cola de Google). No es algo que el código pueda fijar.
 
 ## Estado
 
 - ✅ **Etapa 1**: esqueleto que arranca (pestañas, dirección, botón, tarjeta de salida).
 - ✅ **Etapa 2**: contrato definitivo + `/api/translate` con datos falsos, interfaz conectada y
   segmentos en pantalla (original · traducción · palabra por palabra · gramática).
-- ⬜ **Etapa 3**: IA real (proveedor Gemini tras `/api/translate`).
+- ✅ **Etapa 3**: IA real (Gemini detrás de `/api/translate`), con carrera de modelos, saneado
+  de respuestas, caché en memoria y contador de espera.
 - ⬜ **Etapa 4**: las cinco funcionalidades en pantalla, una a una (incluye furigana y diccionario).
 - ⬜ **Etapa 5**: despliegue en Netlify (`netlify.toml`) y documentación final.
 

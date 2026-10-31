@@ -1,5 +1,6 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { requestTranslation } from './api'
+import { cachedResult, rememberResult } from './cache'
 import { ResultCard } from './components/ResultCard'
 import { MODES, modeInfo } from './modes'
 import type { Direction, Mode, TranslationRequest, TranslationResult } from './types'
@@ -23,6 +24,20 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  /** Segundos que lleva la petición en curso. Solo informa: no cambia nada de la petición. */
+  const [elapsed, setElapsed] = useState(0)
+
+  useEffect(() => {
+    if (!isLoading) {
+      setElapsed(0)
+      return
+    }
+
+    const startedAt = Date.now()
+    const timer = setInterval(() => setElapsed(Math.floor((Date.now() - startedAt) / 1000)), 1000)
+    return () => clearInterval(timer)
+  }, [isLoading])
+
   const activeMode = modeInfo(mode)
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -30,14 +45,24 @@ export default function App() {
     const phrase = text.trim()
     if (!phrase || isLoading) return
 
-    setIsLoading(true)
+    // El modo y la dirección se capturan aquí: la respuesta pertenece a esta petición,
+    // aunque el usuario cambie de pestaña mientras espera.
+    const request: TranslationRequest = { text: phrase, mode, direction }
+
     setError(null)
 
+    // Ya pedida antes (misma frase, modo y dirección): se pinta sin llamar a la IA.
+    const cached = cachedResult(request)
+    if (cached) {
+      setAnswer({ request, result: cached })
+      return
+    }
+
+    setIsLoading(true)
+
     try {
-      // El modo y la dirección se capturan aquí: la respuesta pertenece a esta petición,
-      // aunque el usuario cambie de pestaña mientras espera.
-      const request: TranslationRequest = { text: phrase, mode, direction }
       const result = await requestTranslation(request)
+      rememberResult(request, result)
       setAnswer({ request, result })
     } catch (problem) {
       // La tarjeta anterior era de otra frase: dejarla visible junto al error confunde.
@@ -114,9 +139,16 @@ export default function App() {
               disabled={!text.trim() || isLoading}
               className="rounded-xl bg-red-600 px-5 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-stone-300"
             >
-              {isLoading ? 'Traduciendo…' : 'Traducir'}
+              {isLoading ? `Traduciendo…${elapsed > 0 ? ` ${elapsed}s` : ''}` : 'Traducir'}
             </button>
           </div>
+
+          {/* La IA gratuita tiene cola: si tarda, mejor decirlo que dejar el botón mudo. */}
+          {isLoading && elapsed >= 10 && (
+            <p className="mt-3 text-xs text-amber-700">
+              El modelo gratuito está lento ahora mismo. Puedes esperar o volver a intentarlo.
+            </p>
+          )}
         </form>
 
         {/* Una sola salida: la del modo que se envió. Sin pestañas aquí. */}
