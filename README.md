@@ -26,6 +26,24 @@ Otros comandos:
 | `npm run build` | Comprueba los tipos (`tsc --noEmit`) y genera `dist/` |
 | `npm run preview` | Sirve el resultado de `build` para revisarlo |
 
+## Variables de entorno
+
+Todas viven en `.env` (copia de `.env.example`). Sin `GEMINI_API_KEY` la app arranca, pero
+`/api/translate` responde `500`.
+
+| Variable | Por defecto | Para qué |
+|---|---|---|
+| `AI_PROVIDER` | `gemini` | Proveedor de IA. Hoy solo `gemini` está implementado |
+| `GEMINI_API_KEY` | — | **Obligatoria**. Se saca de <https://aistudio.google.com/apikey> |
+| `GEMINI_MODEL` | `gemini-3.5-flash-lite` | Modelo principal (medido en 4–6 s) |
+| `GEMINI_FALLBACK_MODEL` | `gemini-3.5-flash` | Modelo de reserva. Vacío = sin reserva |
+| `GEMINI_TIMEOUT_MS` | `15000` | Espera máxima por intento |
+| `GEMINI_HEDGE_DELAY_MS` | `1500` | Espera antes de lanzar la reserva en paralelo |
+| `GEMINI_THINKING_BUDGET` | vacío | Tokens de "pensamiento". Vacío = no se envía el campo |
+
+La clave **nunca** se sube al repo ni llega al navegador: solo la lee el servidor de Vite
+(o la Netlify Function, en la Etapa 5).
+
 ## Cómo funciona la interfaz
 
 Tres pestañas que funcionan como **modos**. No son vistas del mismo dato: cada una hace su
@@ -41,25 +59,48 @@ Son acumulativos: `grammar` ⊃ `breakdown` ⊃ `translate`.
 
 Reglas ya decididas:
 
+- **Direcciones**: `ja-to-es` y `es-to-ja`. El placeholder cambia, y el japonés que lleva
+  furigana es el original al traducir desde japonés y la traducción al traducir desde español.
 - **Una sola salida**: la tarjeta del modo enviado. No hay pestañas en la zona de resultados.
 - Al cambiar de pestaña, la salida anterior **se queda** y no se relanza ninguna petición.
   La tarjeta lleva una etiqueta con el modo que la generó.
-- **Furigana**: un interruptor global. Si está activo, todo kanji lleva su lectura kana en
-  cualquier modo. La lectura la devuelve la IA en los segmentos, así que los tres prompts
-  la piden aunque el modo no la pinte.
-- Caché en memoria por (dirección, frase, modo) para no repetir llamadas ni gastar cupo.
+- **Furigana**: un interruptor global arriba a la derecha, **encendido por defecto**. Pinta
+  `<ruby>` sobre el japonés (original en `ja-to-es`, traducción en `es-to-ja`). En el desglose
+  la lectura va en su propia columna. Cambiarlo **no lanza peticiones**: la lectura ya viene
+  en los segmentos de los tres modos. No se persiste: al recargar vuelve a encendido.
+- **Caché** en memoria por (dirección, frase, modo): repetir una consulta es instantáneo y no
+  gasta cupo. Se vacía al recargar la página.
+
+## Prueba rápida
+
+1. `npm run dev` y abre <http://localhost:5173>.
+2. En **Traductor**, pega `昨日は雨が降りましたが、今日は晴れています。` y pulsa **Traducir**.
+3. Verás la lectura kana sobre los kanji. Apaga el interruptor **Furigana**: desaparece al
+   instante y no se lanza ninguna petición.
+4. Cambia a **Español → 日本語**, prueba `Ayer llovió, pero hoy hace sol.` y comprueba que el
+   furigana sale ahora en la traducción japonesa.
+5. Repite la misma frase en el mismo modo y dirección: la respuesta es instantánea (caché).
+
+## Limitaciones conocidas
+
+- La latencia del **free tier** de Gemini varía por momentos: la misma frase puede tardar 1 s o
+  20 s. La app lo mitiga con carrera de modelos, timeout y contador de espera, pero no lo elimina.
+- **Sin persistencia** en la V1: la caché, el diccionario (cuando exista) y el estado del
+  interruptor de furigana se pierden al recargar.
+- Si la IA trocea la frase de forma que los segmentos no reconstruyen el texto, el furigana cae
+  a texto plano a propósito: mejor sin lectura que con una frase rota.
 
 ## Estructura
 
 ```
 nihon-translator/
-├── AGENTS.md            reglas del proyecto para el agente
-├── contexto.md          estado, arranque y siguiente paso
-├── memoria.md           decisiones y su porqué
+├── AGENTS.md            reglas del proyecto (solo local, no se publica)
+├── contexto.md          estado y siguiente paso (solo local)
+├── memoria.md           decisiones y su porqué (solo local)
 ├── index.html           la única página; contiene <div id="root">
 ├── vite.config.ts       plugins de Vite + middleware POST /api/translate (dev y preview)
 ├── tsconfig.json        TypeScript en modo estricto (incluye src/ y server/)
-├── .env.example         variables previstas (sin valores reales)
+├── .env.example         plantilla de variables (sin valores reales)
 ├── server/
 │   ├── translate.ts     validación de la petición + translate(): la puerta del endpoint
 │   ├── prompts.ts       un prompt y un esquema JSON por modo (acumulativos)
@@ -80,6 +121,9 @@ nihon-translator/
         ├── ResultCard.tsx   la única tarjeta de salida
         └── Furigana.tsx     japonés con <ruby> (o texto plano si no cuadra)
 ```
+
+`AGENTS.md`, `contexto.md`, `memoria.md` y `.opencode/` están en `.gitignore`: son
+documentación interna del agente y viven solo en local. El repo público lleva solo código.
 
 ## API local
 
