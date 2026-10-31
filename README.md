@@ -74,9 +74,11 @@ nihon-translator/
     ├── modes.ts         etiqueta, hint y color de cada modo
     ├── api.ts           requestTranslation(): fetch + errores + validación
     ├── cache.ts         caché en memoria por (dirección, modo, frase)
+    ├── SettingsContext.tsx  ajuste global: mostrar/ocultar furigana
     ├── App.tsx          pestañas, dirección, textarea, botón y estados
     └── components/
-        └── ResultCard.tsx   la única tarjeta de salida
+        ├── ResultCard.tsx   la única tarjeta de salida
+        └── Furigana.tsx     japonés con <ruby> (o texto plano si no cuadra)
 ```
 
 ## API local
@@ -132,7 +134,9 @@ Se usa la **capa gratuita de la API de Gemini**. Modelo de trabajo: `gemini-3.5-
   segmentos en pantalla (original · traducción · palabra por palabra · gramática).
 - ✅ **Etapa 3**: IA real (Gemini detrás de `/api/translate`), con carrera de modelos, saneado
   de respuestas, caché en memoria y contador de espera.
-- ⬜ **Etapa 4**: las cinco funcionalidades en pantalla, una a una (incluye furigana y diccionario).
+- 🟡 **Etapa 4**: las cinco funcionalidades en pantalla, una a una.
+  - ✅ Furigana global con `<ruby>` e interruptor (original en `ja-to-es`, traducción en `es-to-ja`).
+  - ⬜ Diccionario de sesión.
 - ⬜ **Etapa 5**: despliegue en Netlify (`netlify.toml`) y documentación final.
 
 ## Versiones

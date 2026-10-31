@@ -3,6 +3,7 @@ import { requestTranslation } from './api'
 import { cachedResult, rememberResult } from './cache'
 import { ResultCard } from './components/ResultCard'
 import { MODES, modeInfo } from './modes'
+import { useSettings } from './SettingsContext'
 import type { Direction, Mode, TranslationRequest, TranslationResult } from './types'
 
 /** Petición + respuesta, para que la tarjeta sepa de qué frase habla. */
@@ -17,6 +18,7 @@ const DIRECTIONS: Array<{ id: Direction; label: string }> = [
 ]
 
 export default function App() {
+  const { showFurigana, toggleFurigana } = useSettings()
   const [mode, setMode] = useState<Mode>('translate')
   const [direction, setDirection] = useState<Direction>('ja-to-es')
   const [text, setText] = useState('')
@@ -84,6 +86,33 @@ export default function App() {
             <h1 className="text-xl font-semibold tracking-tight">Nihon Translator</h1>
             <p className="text-sm text-stone-500">Japonés ↔ español para estudiar, no solo para copiar.</p>
           </div>
+
+          {/* Interruptor global: afecta a todo el japonés de la app, no a un componente. */}
+          <button
+            type="button"
+            role="switch"
+            aria-checked={showFurigana}
+            aria-label="Mostrar furigana"
+            onClick={toggleFurigana}
+            className={`ml-auto flex shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+              showFurigana
+                ? 'border-sky-300 bg-sky-50 text-sky-800'
+                : 'border-stone-300 text-stone-500 hover:border-stone-400'
+            }`}
+          >
+            <span
+              className={`relative h-4 w-7 rounded-full transition ${
+                showFurigana ? 'bg-sky-600' : 'bg-stone-300'
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 size-3 rounded-full bg-white shadow-sm transition-all ${
+                  showFurigana ? 'left-3.5' : 'left-0.5'
+                }`}
+              />
+            </span>
+            Furigana
+          </button>
         </header>
 
         <form onSubmit={handleSubmit} className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm sm:p-6">

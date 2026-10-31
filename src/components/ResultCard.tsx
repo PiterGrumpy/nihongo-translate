@@ -1,5 +1,6 @@
 import { modeInfo } from '../modes'
 import type { TranslationRequest, TranslationResult } from '../types'
+import { Furigana } from './Furigana'
 
 type Props = {
   /** La petición que generó esta respuesta: así el original no se confunde si luego editas. */
@@ -15,11 +16,16 @@ type Props = {
  * - Desglose:  + palabra por palabra (lectura y significado)
  * - Gramática: + explicación
  *
- * El furigana con `<ruby>` llega en la Etapa 4; aquí la lectura se muestra al lado.
+ * El japonés se pinta con `<ruby>` cuando el interruptor global de furigana está activo:
+ * el original en `ja-to-es` y la traducción en `es-to-ja` (son los trozos que devuelve la IA).
  */
 export function ResultCard({ request, result }: Props) {
   const mode = modeInfo(result.mode)
   const showBreakdown = result.mode !== 'translate' && result.segments.length > 0
+
+  // La IA trocea la frase japonesa: el original al traducir desde japonés y la
+  // traducción al traducir desde español (ver `segmentsSource` en server/prompts.ts).
+  const japanese = request.direction === 'ja-to-es' ? request.text : result.translation
 
   return (
     <article className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
@@ -27,17 +33,28 @@ export function ResultCard({ request, result }: Props) {
         <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ${mode.badge}`}>
           Resultado de: {mode.label}
         </span>
-        <span className="text-xs text-stone-400">Datos de prueba · sin IA todavía</span>
       </div>
 
       <div className="space-y-4">
         <div>
           <h3 className="text-xs font-medium tracking-wide text-stone-400 uppercase">Original</h3>
-          <p className="mt-1 whitespace-pre-wrap text-stone-500">{request.text}</p>
+          <p className="mt-1 whitespace-pre-wrap text-stone-500">
+            {request.direction === 'ja-to-es' ? (
+              <Furigana segments={result.segments} fallback={request.text} />
+            ) : (
+              request.text
+            )}
+          </p>
         </div>
         <div>
           <h3 className="text-xs font-medium tracking-wide text-stone-400 uppercase">Traducción</h3>
-          <p className="mt-1 text-lg leading-relaxed whitespace-pre-wrap text-stone-900">{result.translation}</p>
+          <p className="mt-1 text-lg leading-relaxed whitespace-pre-wrap text-stone-900">
+            {request.direction === 'es-to-ja' ? (
+              <Furigana segments={result.segments} fallback={japanese} />
+            ) : (
+              result.translation
+            )}
+          </p>
         </div>
       </div>
 
